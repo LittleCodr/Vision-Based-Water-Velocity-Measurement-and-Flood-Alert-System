@@ -32,20 +32,20 @@ const AuthPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 to-slate-100 px-4">
-      <div className="bg-white shadow-lg rounded-lg p-8 w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'repeating-linear-gradient(45deg, #fef4dd, #fef4dd 10px, #f9e0ff 10px, #f9e0ff 20px)' }}>
+      <div className="bg-white border-4 border-slate-900 shadow-[8px_8px_0_#0f172a] rounded-xl p-8 w-full max-w-md">
         <h1 className="text-2xl font-semibold text-slate-900 mb-1">Water Velocity</h1>
         <p className="text-sm text-slate-500 mb-6">Secure dashboard access</p>
 
-        <div className="flex mb-6 border border-slate-200 rounded-md overflow-hidden text-sm">
+        <div className="flex mb-6 border-2 border-slate-900 rounded-md overflow-hidden text-sm">
           <button
-            className={`flex-1 py-2 ${mode === 'login' ? 'bg-sky-100 text-sky-700' : 'bg-white'}`}
+            className={`flex-1 py-2 font-semibold ${mode === 'login' ? 'bg-sky-200 text-slate-900' : 'bg-white'}`}
             onClick={() => setMode('login')}
           >
             Login
           </button>
           <button
-            className={`flex-1 py-2 ${mode === 'register' ? 'bg-sky-100 text-sky-700' : 'bg-white'}`}
+            className={`flex-1 py-2 font-semibold ${mode === 'register' ? 'bg-sky-200 text-slate-900' : 'bg-white'}`}
             onClick={() => setMode('register')}
           >
             Register

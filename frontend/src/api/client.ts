@@ -30,13 +30,28 @@ const safeUserId = () => userId() || 'guest';
 const isoNow = () => new Date().toISOString();
 const uid = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2));
 
+const uploadWithTimeout = async (storagePath: string, file: File, timeoutMs = 15000) => {
+  const storageRef = ref(storage, storagePath);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort('upload-timeout'), timeoutMs);
+  try {
+    // uploadBytes does not accept AbortSignal, but abort will throw from our race below
+    await Promise.race([
+      uploadBytes(storageRef, file, { contentType: file.type }),
+      new Promise((_, reject) => controller.signal.addEventListener('abort', () => reject(new Error('Upload timed out'))))
+    ]);
+    const url = await getDownloadURL(storageRef);
+    return url;
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 export const videoApi = {
   upload: async (file: File) => {
     const id = uid();
     const path = `videos/${id}-${file.name}`;
-    const storageRef = ref(storage, path);
-    await uploadBytes(storageRef, file, { contentType: file.type });
-    const url = await getDownloadURL(storageRef);
+    const url = await uploadWithTimeout(path, file);
     const doc = {
       id,
       name: file.name,
@@ -61,9 +76,7 @@ export const datasetApi = {
   upload: async (file: File) => {
     const id = uid();
     const path = `datasets/${id}-${file.name}`;
-    const storageRef = ref(storage, path);
-    await uploadBytes(storageRef, file, { contentType: file.type });
-    const url = await getDownloadURL(storageRef);
+    const url = await uploadWithTimeout(path, file);
     const doc = {
       id,
       name: file.name,
@@ -181,9 +194,7 @@ export const modelsApi = {
     const id = uid();
     const resolvedVersion = version || `v-${new Date().toISOString()}`;
     const path = `models/${id}-${file.name}`;
-    const storageRef = ref(storage, path);
-    await uploadBytes(storageRef, file, { contentType: file.type });
-    const url = await getDownloadURL(storageRef);
+    const url = await uploadWithTimeout(path, file);
     const docBody = {
       id,
       name: file.name,

@@ -1,16 +1,22 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
   color: #0f172a;
-  background-color: #f8fafc;
+  background-color: #fdf7ec;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
+  background: radial-gradient(circle at 20% 20%, #ffefd6 0, transparent 25%),
+    radial-gradient(circle at 80% 10%, #d8f3ff 0, transparent 22%),
+    radial-gradient(circle at 60% 80%, #ffe0f0 0, transparent 28%),
+    #fdf7ec;
 }
 
 * {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import FileUpload from '../components/FileUpload';
-import { videoApi } from '../api/client';
+import { inferenceApi, videoApi } from '../api/client';
 import { VideoItem } from '../types';
 
 const LiveFeedPage = () => {
@@ -8,6 +8,7 @@ const LiveFeedPage = () => {
   const [uploading, setUploading] = useState(false);
   const [active, setActive] = useState<VideoItem | null>(null);
   const [error, setError] = useState('');
+  const [predicting, setPredicting] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const overlayRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -82,6 +83,20 @@ const LiveFeedPage = () => {
     }
   };
 
+  const runDemoInference = async () => {
+    if (!active) return;
+    setPredicting(true);
+    setError('');
+    try {
+      const syntheticVelocity = Math.max(0.1, Math.random() * 4.5);
+      await inferenceApi.velocity(syntheticVelocity, 'neuromorphic-camera-demo');
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Inference failed');
+    } finally {
+      setPredicting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -111,6 +126,13 @@ const LiveFeedPage = () => {
         <div className="space-y-4">
           <FileUpload label={uploading ? 'Uploading...' : 'Upload video (mp4/avi)'} accept="video/mp4,video/x-msvideo,video/avi" onChange={onUpload} />
           {error && <p className="text-sm text-rose-600">{error}</p>}
+          <button
+            disabled={!active || predicting}
+            onClick={runDemoInference}
+            className="w-full rounded-md border-2 border-slate-900 bg-amber-200 text-slate-900 py-2 text-sm font-semibold hover:shadow-[4px_4px_0_#0f172a] disabled:opacity-50"
+          >
+            {predicting ? 'Estimating...' : 'Estimate velocity (neuromorphic demo)'}
+          </button>
           <div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
             {videos.map((video) => (
               <button
