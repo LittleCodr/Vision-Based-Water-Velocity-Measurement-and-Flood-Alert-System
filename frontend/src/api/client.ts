@@ -13,8 +13,9 @@ import { auth, db, storage } from '../firebase';
 export const setAuthToken = () => undefined; // no-op in Firebase-only flow
 
 const userId = () => auth.currentUser?.uid;
+const safeUserId = () => userId() || 'guest';
 const isoNow = () => new Date().toISOString();
-const uid = () => crypto.randomUUID();
+const uid = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2));
 
 export const videoApi = {
   upload: async (file: File) => {
@@ -31,7 +32,7 @@ export const videoApi = {
       contentType: file.type,
       size: file.size,
       createdAt: isoNow(),
-      userId: userId()
+      userId: safeUserId()
     } satisfies VideoItem & Record<string, unknown>;
     await addDoc(collection(db, 'videos'), doc);
     return { data: { data: doc } };
@@ -58,7 +59,7 @@ export const datasetApi = {
       contentType: file.type,
       size: file.size,
       createdAt: isoNow(),
-      userId: userId()
+      userId: safeUserId()
     } satisfies DatasetItem & Record<string, unknown>;
     await addDoc(collection(db, 'datasets'), doc);
     return { data: { data: doc } };
@@ -78,7 +79,7 @@ export const velocityApi = {
       velocity,
       source,
       timestamp: timestamp || isoNow(),
-      userId: userId()
+      userId: safeUserId()
     } satisfies VelocityLog & Record<string, unknown>;
     await addDoc(collection(db, 'velocity_logs'), doc);
     return { data: { data: doc } };
@@ -101,7 +102,7 @@ export const alertsApi = {
       velocity,
       status,
       triggeredAt: isoNow(),
-      userId: userId()
+      userId: safeUserId()
     } satisfies AlertItem & Record<string, unknown>;
     await addDoc(collection(db, 'alerts'), doc);
     if (status === 'danger') {
@@ -111,7 +112,7 @@ export const alertsApi = {
           type: 'municipality_alert',
           message: `High flood alert: velocity ${velocity} m/s (threshold ${threshold} m/s)`,
           createdAt: isoNow(),
-          userId: userId()
+          userId: safeUserId()
         });
       } catch (err) {
         console.error('Notification write failed', err);

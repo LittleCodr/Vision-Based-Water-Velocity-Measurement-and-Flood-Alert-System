@@ -25,19 +25,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (cached) {
       const parsed: AuthUser = JSON.parse(cached);
       setUser(parsed);
-      setAuthToken(parsed.token);
     }
     setLoading(false);
   }, []);
 
   const login = async (email: string, password: string) => {
     const cred = await signInWithEmailAndPassword(auth, email, password);
-    const token = await cred.user.getIdToken();
     const authed: AuthUser = {
       uid: cred.user.uid,
       email: cred.user.email || email,
       role: 'user',
-      token
+      token: await cred.user.getIdToken()
     };
     setUser(authed);
     localStorage.setItem(storageKey, JSON.stringify(authed));
@@ -45,12 +43,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = async (email: string, password: string, role: UserRole) => {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
-    const token = await cred.user.getIdToken();
     const authed: AuthUser = {
       uid: cred.user.uid,
       email: cred.user.email || email,
       role,
-      token
+      token: await cred.user.getIdToken()
     };
     setUser(authed);
     localStorage.setItem(storageKey, JSON.stringify(authed));
