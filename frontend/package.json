@@ -15,6 +15,7 @@
     "chartjs-adapter-date-fns": "^3.0.0",
     "date-fns": "^4.1.0",
     "firebase": "^12.9.0",
+    "onnxruntime-web": "^1.24.1",
     "react": "^18.2.0",
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.2.0",

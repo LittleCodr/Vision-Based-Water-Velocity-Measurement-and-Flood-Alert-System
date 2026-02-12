@@ -11,6 +11,7 @@ const ModelPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [models, setModels] = useState<ModelFile[]>([]);
+  const [modelsError, setModelsError] = useState('');
   const [uploading, setUploading] = useState(false);
   const [version, setVersion] = useState('');
   const [notes, setNotes] = useState('');
@@ -43,8 +44,10 @@ const ModelPage = () => {
     try {
       const res = await modelsApi.list();
       setModels(res.data.data || []);
-    } catch (err) {
+      setModelsError('');
+    } catch (err: any) {
       console.error(err);
+      setModelsError(err?.response?.data?.message || 'Failed to load models');
     }
   };
 
@@ -208,14 +211,25 @@ const ModelPage = () => {
         <div className="lg:col-span-2 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-slate-900">Model registry</h3>
-            <span className="text-xs text-slate-500">Newest first</span>
+            <div className="flex items-center space-x-2 text-xs text-slate-500">
+              <span>Newest first</span>
+              <button
+                onClick={loadModels}
+                className="rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-100"
+              >
+                Refresh
+              </button>
+            </div>
           </div>
+          {modelsError && <p className="text-sm text-rose-600 mb-2">{modelsError}</p>}
           <DataTable
             columns={[
               { header: 'Name', accessor: (m) => m.name },
               { header: 'Version', accessor: (m) => m.version },
               { header: 'Status', accessor: (m) => m.status },
               { header: 'Uploaded', accessor: (m) => new Date(m.uploadedAt).toLocaleString() },
+              { header: 'Main file', accessor: (m) => m.mainFilePath || 'n/a' },
+              { header: 'Files', accessor: (m) => (m.files ? m.files.length : m.sourceUrl ? 1 : 0) },
               { header: 'Source', accessor: (m) => m.sourceUrl ? 'Storage' : 'Heuristic' }
             ]}
             rows={models}

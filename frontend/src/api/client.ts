@@ -8,7 +8,7 @@ import {
   query,
   limit as fsLimit
 } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { getDownloadURL, listAll, ref, uploadBytes } from 'firebase/storage';
 import {
   AlertItem,
   DatasetItem,
@@ -57,7 +57,7 @@ export const videoApi = {
   upload: async (file: File) => {
     const id = uid();
     const path = `videos/${id}-${file.name}`;
-    const url = await uploadWithTimeout(path, file);
+    const url = await uploadWithTimeout(path, file, 60000);
     const doc = {
       id,
       name: file.name,
@@ -82,7 +82,7 @@ export const datasetApi = {
   upload: async (file: File) => {
     const id = uid();
     const path = `datasets/${id}-${file.name}`;
-    const url = await uploadWithTimeout(path, file);
+    const url = await uploadWithTimeout(path, file, 45000);
     const doc = {
       id,
       name: file.name,
@@ -195,14 +195,17 @@ export const inferenceApi = {
       explanation: `Heuristic: warn >= ${warn.toFixed(2)} m/s, danger >= ${danger.toFixed(2)} m/s${model ? ` | model: ${model.name}` : ''}${dataset ? ` | dataset: ${dataset.name}` : ''}`
     };
     try {
-      await addDoc(collection(db, 'inference_logs'), {
-        id: uid(),
-        ...result,
-        modelId: model?.id,
-        datasetId: dataset?.id,
-        userId: safeUserId(),
-        createdAt: isoNow()
-      });
+      await addDoc(
+        collection(db, 'inference_logs'),
+        {
+          id: uid(),
+          ...result,
+          ...(model ? { modelId: model.id } : {}),
+          ...(dataset ? { datasetId: dataset.id } : {}),
+          userId: safeUserId(),
+          createdAt: isoNow()
+        } as Record<string, unknown>
+      );
     } catch (err) {
       console.error('Inference log write failed', err);
     }
@@ -273,9 +276,44 @@ export const modelsApi = {
     return { data: { data: docBody } };
   },
   list: async () => {
-    const snap = await getDocs(query(collection(db, 'models'), orderBy('uploadedAt', 'desc')));
-    const items = snap.docs.map((d) => d.data() as ModelFile);
-    return { data: { data: items } };
+    try {
+      const snap = await getDocs(query(collection(db, 'models'), orderBy('uploadedAt', 'desc')));
+      const items = snap.docs.map((d) => d.data() as ModelFile);
+      if (items.length) return { data: { data: items } };
+    } catch (err) {
+      console.error('Model list failed (ordered), retrying unordered', err);
+    }
+    try {
+      const snap = await getDocs(collection(db, 'models'));
+      const items = snap.docs.map((d) => d.data() as ModelFile);
+      if (items.length) return { data: { data: items } };
+    } catch (err) {
+      console.error('Model list failed (unordered)', err);
+    }
+    // Fallback: list from Storage bucket directly
+    try {
+      const root = ref(storage, 'models');
+      const listing = await listAll(root);
+      const items: ModelFile[] = await Promise.all(
+        listing.items.map(async (item) => {
+          const url = await getDownloadURL(item);
+          const name = item.name;
+          return {
+            id: item.fullPath,
+            name,
+            version: 'unknown',
+            status: 'staged',
+            uploadedAt: isoNow(),
+            sourceUrl: url,
+            mainFilePath: item.fullPath
+          } satisfies ModelFile;
+        })
+      );
+      return { data: { data: items } };
+    } catch (err) {
+      console.error('Storage fallback list failed', err);
+      return { data: { data: [] } };
+    }
   }
 };
 

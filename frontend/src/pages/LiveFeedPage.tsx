@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import FileUpload from '../components/FileUpload';
 import { inferenceApi, videoApi } from '../api/client';
+import { analyzeVideoWithRaft, FlowAnalysisResult } from '../lib/raftFlow';
 import { VideoItem } from '../types';
 
 const LiveFeedPage = () => {
@@ -8,7 +9,13 @@ const LiveFeedPage = () => {
   const [uploading, setUploading] = useState(false);
   const [active, setActive] = useState<VideoItem | null>(null);
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [predicting, setPredicting] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState<FlowAnalysisResult | null>(null);
+  const [metersPerPixel, setMetersPerPixel] = useState('0.01');
+  const [fpsHint, setFpsHint] = useState('30');
+  const [samplingMs, setSamplingMs] = useState('120');
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const overlayRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -32,46 +39,22 @@ const LiveFeedPage = () => {
     const video = videoRef.current;
     if (!canvas || !video) return;
     const resize = () => {
-      canvas.width = video.clientWidth;
-      canvas.height = video.clientHeight;
+      canvas.width = video.clientWidth || video.videoWidth;
+      canvas.height = video.clientHeight || video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx?.clearRect(0, 0, canvas.width, canvas.height);
     };
     resize();
     const handleResize = () => resize();
     window.addEventListener('resize', handleResize);
-
-    let raf = 0;
-    const draw = () => {
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const now = Date.now() / 1000;
-      const lines = 18;
-      for (let i = 0; i < lines; i++) {
-        const x = ((i * 73) % canvas.width) + (Math.sin(now + i) * 20);
-        const y = ((i * 37) % canvas.height) + (Math.cos(now * 0.5 + i) * 10);
-        const length = 30 + ((i * 11) % 40);
-        const angle = (now * 0.6 + i) % (Math.PI * 2);
-        const x2 = x + Math.cos(angle) * length;
-        const y2 = y + Math.sin(angle) * length;
-        const danger = length > 50;
-        ctx.strokeStyle = danger ? 'rgba(244, 63, 94, 0.8)' : 'rgba(56, 189, 248, 0.8)';
-        ctx.lineWidth = danger ? 2.4 : 1.4;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-      }
-      raf = requestAnimationFrame(draw);
-    };
-    raf = requestAnimationFrame(draw);
     return () => {
       window.removeEventListener('resize', handleResize);
-      cancelAnimationFrame(raf);
     };
   }, [active]);
 
   const onUpload = async (file: File) => {
     setError('');
+    setInfo('');
     setUploading(true);
     try {
       await videoApi.upload(file);
@@ -79,10 +62,42 @@ const LiveFeedPage = () => {
       const syntheticVelocity = Math.min(6, Math.max(0.3, file.size / 1_000_000));
       await inferenceApi.velocity(syntheticVelocity, 'video-upload');
       await load();
+      setInfo('Uploaded and analyzed. Check alerts/notifications if thresholds were hit.');
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Upload failed');
+      setError(err?.message || err?.response?.data?.message || 'Upload failed');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const runRaftAnalysis = async () => {
+    if (!active || !videoRef.current) {
+      setError('Select a video first.');
+      return;
+    }
+    setAnalyzing(true);
+    setError('');
+    setInfo('');
+    try {
+      const result = await analyzeVideoWithRaft({
+        video: videoRef.current,
+        overlay: overlayRef.current,
+        metersPerPixel: Number(metersPerPixel) || 0.01,
+        fpsHint: Number(fpsHint) || 24,
+        sampleEveryMs: Number(samplingMs) || 120,
+        maxPairs: 28,
+        targetWidth: 416
+      });
+      setAnalysis(result);
+      const representative = result.p95 || result.average || 0;
+      if (representative > 0) {
+        await inferenceApi.velocity(Number(representative.toFixed(3)), 'raft-onnx');
+      }
+      setInfo(`RAFT-small flow velocity ~${representative.toFixed(2)} m/s (p95). Alerts updated.`);
+    } catch (err: any) {
+      setError(err?.message || err?.response?.data?.message || 'RAFT analysis failed');
+    } finally {
+      setAnalyzing(false);
     }
   };
 
@@ -129,6 +144,7 @@ const LiveFeedPage = () => {
         <div className="space-y-4">
           <FileUpload label={uploading ? 'Uploading...' : 'Upload video (mp4/avi)'} accept="video/mp4,video/x-msvideo,video/avi" onChange={onUpload} />
           {error && <p className="text-sm text-rose-600">{error}</p>}
+          {info && <p className="text-sm text-emerald-600">{info}</p>}
           <button
             disabled={!active || predicting}
             onClick={runDemoInference}
@@ -136,6 +152,71 @@ const LiveFeedPage = () => {
           >
             {predicting ? 'Estimating...' : 'Estimate velocity (neuromorphic demo)'}
           </button>
+          <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="flex items-center justify-between text-sm text-slate-700">
+              <span className="font-semibold text-slate-900">RAFT-small (ONNX) analysis</span>
+              <span className="text-xs text-slate-500">Optical flow</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <label className="space-y-1">
+                <span className="block text-slate-500">Meters/pixel</span>
+                <input
+                  value={metersPerPixel}
+                  onChange={(e) => setMetersPerPixel(e.target.value)}
+                  className="w-full rounded-md border border-slate-200 px-2 py-1"
+                  type="number"
+                  step="0.0001"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="block text-slate-500">FPS hint</span>
+                <input
+                  value={fpsHint}
+                  onChange={(e) => setFpsHint(e.target.value)}
+                  className="w-full rounded-md border border-slate-200 px-2 py-1"
+                  type="number"
+                  step="1"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="block text-slate-500">Sample ms</span>
+                <input
+                  value={samplingMs}
+                  onChange={(e) => setSamplingMs(e.target.value)}
+                  className="w-full rounded-md border border-slate-200 px-2 py-1"
+                  type="number"
+                  step="10"
+                />
+              </label>
+            </div>
+            <button
+              disabled={!active || analyzing}
+              onClick={runRaftAnalysis}
+              className="w-full rounded-md border-2 border-slate-900 bg-sky-200 text-slate-900 py-2 text-sm font-semibold hover:shadow-[4px_4px_0_#0f172a] disabled:opacity-50"
+            >
+              {analyzing ? 'Analyzing with RAFT…' : 'Analyze with RAFT-small (ONNX)'}
+            </button>
+            {analysis && (
+              <div className="grid grid-cols-2 gap-2 text-xs text-slate-700">
+                <div className="rounded-md bg-slate-50 border border-slate-200 p-2">
+                  <div className="text-slate-500">p95 velocity</div>
+                  <div className="text-lg font-semibold text-slate-900">{analysis.p95.toFixed(2)} m/s</div>
+                </div>
+                <div className="rounded-md bg-slate-50 border border-slate-200 p-2">
+                  <div className="text-slate-500">Mean / Max</div>
+                  <div className="text-lg font-semibold text-slate-900">{analysis.average.toFixed(2)} / {analysis.max.toFixed(2)} m/s</div>
+                </div>
+                <div className="rounded-md bg-slate-50 border border-slate-200 p-2">
+                  <div className="text-slate-500">Samples</div>
+                  <div className="text-sm font-semibold text-slate-900">{analysis.framesUsed} pairs</div>
+                </div>
+                <div className="rounded-md bg-slate-50 border border-slate-200 p-2">
+                  <div className="text-slate-500">Δt mean</div>
+                  <div className="text-sm font-semibold text-slate-900">{(analysis.dtStats.mean * 1000).toFixed(0)} ms</div>
+                </div>
+              </div>
+            )}
+          </div>
           <div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100">
             {videos.map((video) => (
               <button
@@ -143,7 +224,10 @@ const LiveFeedPage = () => {
                 className={`w-full text-left px-4 py-3 text-sm hover:bg-slate-50 ${
                   active?.id === video.id ? 'bg-slate-100' : ''
                 }`}
-                onClick={() => setActive(video)}
+                onClick={() => {
+                  setActive(video);
+                  setAnalysis(null);
+                }}
               >
                 <div className="font-medium text-slate-900">{video.name}</div>
                 <div className="text-xs text-slate-500">{new Date(video.createdAt).toLocaleString()}</div>
