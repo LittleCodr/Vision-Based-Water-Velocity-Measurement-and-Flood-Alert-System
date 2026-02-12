@@ -111,9 +111,12 @@ export const alertsApi = {
           id: uid(),
           type: 'municipality_alert',
           message: `High flood alert: velocity ${velocity} m/s (threshold ${threshold} m/s)`,
+          channel: 'simulated',
+          delivered: true,
           createdAt: isoNow(),
           userId: safeUserId()
         });
+        console.info('Simulated notification dispatched to municipality');
       } catch (err) {
         console.error('Notification write failed', err);
       }
