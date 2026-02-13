@@ -35,20 +35,30 @@ const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'service_6
 const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'template_cny2pih';
 const EMAILJS_ACCESS_TOKEN = import.meta.env.VITE_EMAILJS_ACCESS_TOKEN || 'BdehdbuzRiHLgX0TMnU_L';
 const MUNICIPALITY_EMAIL = import.meta.env.VITE_MUNICIPALITY_EMAIL || 'akshitar7890@gmail.com';
+const EMAILJS_PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'JEz195IYZP1Xkj4s8';
 
 const sendMunicipalityEmail = async (payload: EmailDispatch) => {
   try {
     const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${EMAILJS_ACCESS_TOKEN}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         service_id: EMAILJS_SERVICE_ID,
         template_id: EMAILJS_TEMPLATE_ID,
-        template_params: payload,
-        accessToken: EMAILJS_ACCESS_TOKEN
+        user_id: EMAILJS_PUBLIC_KEY,
+        accessToken: EMAILJS_ACCESS_TOKEN,
+        template_params: {
+          to_email: payload.to_email || MUNICIPALITY_EMAIL,
+          to: payload.to_email || MUNICIPALITY_EMAIL,
+          email: payload.to_email || MUNICIPALITY_EMAIL,
+          message: payload.message,
+          velocity: payload.velocity ?? '',
+          threshold: payload.threshold ?? '',
+          status: payload.status ?? '',
+          from_name: 'Flood Monitor'
+        }
       })
     });
     if (!res.ok) {
@@ -168,33 +178,31 @@ export const alertsApi = {
       userId: safeUserId()
     } satisfies AlertItem & Record<string, unknown>;
     await addDoc(collection(db, 'alerts'), doc);
-    if (status === 'danger') {
-      const notificationDoc = {
-        id: uid(),
-        type: 'municipality_alert',
-        message: `High flood alert: velocity ${velocity} m/s (threshold ${threshold} m/s)`,
-        channel: 'emailjs',
-        delivered: false,
-        createdAt: isoNow(),
-        userId: safeUserId()
-      } satisfies NotificationItem & Record<string, unknown>;
+    const notificationDoc = {
+      id: uid(),
+      type: 'municipality_alert',
+      message: `Alert: velocity ${velocity} m/s (threshold ${threshold} m/s), status ${status}`,
+      channel: 'emailjs',
+      delivered: false,
+      createdAt: isoNow(),
+      userId: safeUserId()
+    } satisfies NotificationItem & Record<string, unknown>;
+    try {
+      await sendMunicipalityEmail({
+        to_email: MUNICIPALITY_EMAIL,
+        message: notificationDoc.message,
+        velocity: velocity.toFixed(2),
+        threshold: threshold.toFixed(2),
+        status: status
+      });
+      notificationDoc.delivered = true;
+    } catch (err) {
+      console.error('Municipality email send failed', err);
+    } finally {
       try {
-        await sendMunicipalityEmail({
-          to_email: MUNICIPALITY_EMAIL,
-          message: notificationDoc.message,
-          velocity: velocity.toFixed(2),
-          threshold: threshold.toFixed(2),
-          status: status
-        });
-        notificationDoc.delivered = true;
+        await addDoc(collection(db, 'notifications'), notificationDoc);
       } catch (err) {
-        console.error('Municipality email send failed', err);
-      } finally {
-        try {
-          await addDoc(collection(db, 'notifications'), notificationDoc);
-        } catch (err) {
-          console.error('Notification log write failed', err);
-        }
+        console.error('Notification log write failed', err);
       }
     }
     return { data: { data: doc } };

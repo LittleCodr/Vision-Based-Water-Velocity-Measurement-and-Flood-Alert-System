@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { analyzeVideo } from '../api/analysis';
+import { alertsApi } from '../api/client';
 import { VideoAnalysisResult } from '../types';
 import FileUpload from './FileUpload';
 import StatCard from './StatCard';
@@ -27,6 +28,12 @@ const BackendAnalyzer = () => {
     try {
       const response = await analyzeVideo(selectedFile);
       setResult(response);
+      const threshold = 2; // px/frame threshold matching backend risk logic
+      if (response.risk_level === 'HIGH') {
+        await alertsApi.create(threshold, response.average_velocity, 'danger');
+      } else if (response.risk_level === 'MODERATE') {
+        await alertsApi.create(threshold, response.average_velocity, 'warning');
+      }
     } catch (err: any) {
       setError(err?.message || 'Analysis failed');
     } finally {

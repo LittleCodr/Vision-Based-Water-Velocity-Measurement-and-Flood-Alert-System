@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import LineChart from '../components/LineChart';
 import DataTable from '../components/DataTable';
-import { rainApi, velocityApi, waterLevelApi } from '../api/client';
+import { alertsApi, rainApi, velocityApi, waterLevelApi } from '../api/client';
 import { VelocityLog } from '../types';
 
 const VelocityAnalyticsPage = () => {
@@ -12,6 +12,13 @@ const VelocityAnalyticsPage = () => {
   const [waterLevel, setWaterLevel] = useState('0.0');
   const [rainRate, setRainRate] = useState('0.0');
   const [secondaryError, setSecondaryError] = useState('');
+
+  const warnThreshold = Number(import.meta.env.VITE_VELOCITY_WARN || '2.5');
+  const dangerThreshold = (() => {
+    const env = import.meta.env.VITE_VELOCITY_DANGER;
+    if (env) return Number(env);
+    return warnThreshold * 1.5;
+  })();
 
   const load = async () => {
     try {
@@ -36,6 +43,11 @@ const VelocityAnalyticsPage = () => {
     }
     try {
       await velocityApi.create(numeric, source);
+      if (numeric >= dangerThreshold) {
+        await alertsApi.create(dangerThreshold, numeric, 'danger');
+      } else if (numeric >= warnThreshold) {
+        await alertsApi.create(warnThreshold, numeric, 'warning');
+      }
       setVelocity('0');
       await load();
     } catch (err: any) {
