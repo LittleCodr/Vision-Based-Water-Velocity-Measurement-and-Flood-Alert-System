@@ -3,6 +3,7 @@ import FileUpload from '../components/FileUpload';
 import { inferenceApi, videoApi } from '../api/client';
 import { analyzeVideoWithRaft, FlowAnalysisResult } from '../lib/raftFlow';
 import { VideoItem } from '../types';
+import BackendAnalyzer from '../components/BackendAnalyzer';
 
 const LiveFeedPage = () => {
   const [videos, setVideos] = useState<VideoItem[]>([]);
@@ -129,6 +130,8 @@ const LiveFeedPage = () => {
         </div>
         <span className="text-xs text-slate-400">// TODO: Camera stream integration</span>
       </div>
+
+      <BackendAnalyzer />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 rounded-lg border border-slate-200 bg-black aspect-video overflow-hidden">

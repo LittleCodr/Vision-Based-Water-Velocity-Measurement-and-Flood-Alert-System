@@ -66,6 +66,20 @@ export interface InferenceResult {
   explanation: string;
 }
 
+export interface VideoAnalysisResult {
+  flood_probability: number;
+  average_velocity: number;
+  risk_level: 'LOW' | 'MODERATE' | 'HIGH';
+}
+
+export interface EmailDispatch {
+  to_email: string;
+  message: string;
+  velocity?: string;
+  threshold?: string;
+  status?: string;
+}
+
 export interface ApiResponse<T> {
   data: T;
   message?: string;

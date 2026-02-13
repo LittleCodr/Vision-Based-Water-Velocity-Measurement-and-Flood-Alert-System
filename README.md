@@ -1,12 +1,14 @@
 # Water Velocity Monitoring System
 
-Production-ready dashboard with React (Vite + Tailwind) frontend and Node.js + Express backend wired to Firebase (Auth, Firestore, Storage).
+Production-ready dashboard with React (Vite + Tailwind) plus a FastAPI + TensorFlow analyzer for smart drainage flood monitoring. Node.js + Express backend (Firebase integration) is still present for auth/storage; the new Python service handles ML inference and optical flow.
 
 ## Features
 - Email/password auth with roles (admin/user) backed by Firebase Authentication
-- Dashboard pages: Overview, Live Feed (video upload/list/playback), Velocity Analytics (chart + table + manual entry), Alerts (threshold + history), Datasets (upload/list), Model placeholder (future ML integration)
+- Dashboard pages: Overview, Live Feed (video upload/list/playback), Velocity Analytics (chart + table + manual entry), Alerts (threshold + history), Datasets (upload/list)
+- FastAPI endpoint `/analyze-video` (uploads mp4/avi) → flood probability, average optical-flow velocity (Lucas–Kanade), risk level (LOW/MODERATE/HIGH)
 - REST APIs (`/api/auth/*`, `/api/upload/*`, `/api/velocity`, `/api/alerts`) talking to Firestore/Storage
 - Future hooks in code: `// TODO: Camera stream integration`, `// TODO: ML inference API`
+- EmailJS dispatch on danger alerts (municipality) using `VITE_EMAILJS_*` env vars
 
 ## Stack
 - Frontend: Vite + React + TypeScript + Tailwind + Chart.js
@@ -15,6 +17,7 @@ Production-ready dashboard with React (Vite + Tailwind) frontend and Node.js + E
 
 ## Prerequisites
 - Node.js 18+
+- Python 3.10+ with pip (for FastAPI + TensorFlow backend)
 - Firebase project with Firestore + Storage + Authentication enabled
 
 ## Setup
@@ -32,14 +35,33 @@ npm install --prefix backend
   - `FIREBASE_STORAGE_BUCKET` (e.g., `your-project.appspot.com`)
   - `FIREBASE_API_KEY` (from Firebase console; used for Auth REST)
   - `VELOCITY_ALERT_THRESHOLD` (optional auto-alert trigger)
-- Frontend: copy `frontend/.env.example` to `frontend/.env` and set `VITE_API_BASE_URL` (default `http://localhost:4000`).
+- Frontend: copy `frontend/.env.example` to `frontend/.env` and set `VITE_API_BASE_URL` (default `http://localhost:8000` for FastAPI). If you still run the Node backend for Firebase APIs, point to that URL instead.
+- EmailJS (municipality alerts): set `VITE_EMAILJS_SERVICE_ID`, `VITE_EMAILJS_TEMPLATE_ID`, `VITE_EMAILJS_ACCESS_TOKEN`, `VITE_MUNICIPALITY_EMAIL` (defaults provided in `.env.example`).
 
 4) Run dev servers (two terminals)
 ```bash
 npm run dev --prefix backend
 npm run dev --prefix frontend
 ```
-Frontend runs at http://localhost:5173, backend at http://localhost:4000.
+Frontend runs at http://localhost:5173, Node backend (Firebase APIs) at http://localhost:4000, FastAPI analyzer at http://localhost:8000.
+
+### FastAPI AI backend (Python)
+This service powers the `/analyze-video` endpoint (TensorFlow flood classifier + Lucas–Kanade optical flow).
+
+1) Place `flood_classifier.h5` in `backend/` (or set `MODEL_PATH=/path/to/model.h5`).
+2) Install deps
+```bash
+cd backend
+python -m venv .venv
+.venv/Scripts/activate  # Windows PowerShell: .venv\\Scripts\\Activate.ps1
+pip install -r requirements.txt
+# Quick alt (no venv): pip install fastapi uvicorn tensorflow opencv-python numpy
+```
+3) Run
+```bash
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+Optional: set `FRONTEND_ORIGINS=http://localhost:5173` (comma-separated) for stricter CORS.
 
 ## API (backend)
 - `POST /api/auth/register` { email, password, role }
@@ -52,7 +74,9 @@ Frontend runs at http://localhost:5173, backend at http://localhost:4000.
 - `GET /api/velocity`
 - `POST /api/alerts` { threshold, velocity, status }
 - `GET /api/alerts`
+- `POST /analyze-video` (FastAPI) multipart `file` -> `{ flood_probability, average_velocity, risk_level }`
 All protected endpoints expect `Authorization: Bearer <idToken>` (from login/register responses).
+FastAPI `/analyze-video` is currently open (no auth) for local testing.
 
 ## Firebase Collections (example docs)
 ```json

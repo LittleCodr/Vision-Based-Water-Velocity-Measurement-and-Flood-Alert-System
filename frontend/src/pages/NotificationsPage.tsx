@@ -5,8 +5,8 @@ import { NotificationItem } from '../types';
 
 const NotificationsPage = () => {
   const [items, setItems] = useState<NotificationItem[]>([]);
-  const [message, setMessage] = useState('Simulated alert to municipality');
-  const [channel, setChannel] = useState('simulated');
+  const [message, setMessage] = useState('Alert to municipality via EmailJS');
+  const [channel, setChannel] = useState('emailjs');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -42,13 +42,13 @@ const NotificationsPage = () => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-slate-900">Notifications</h2>
-          <p className="text-sm text-slate-500">Simulated municipality dispatch log</p>
+          <p className="text-sm text-slate-500">Municipality dispatch log (EmailJS)</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="text-lg font-semibold text-slate-900 mb-3">Simulate send</h3>
+          <h3 className="text-lg font-semibold text-slate-900 mb-3">Send test notification</h3>
           <form className="space-y-3" onSubmit={submit}>
             <div>
               <label className="block text-sm text-slate-600 mb-1">Message</label>
@@ -66,6 +66,7 @@ const NotificationsPage = () => {
                 onChange={(e) => setChannel(e.target.value)}
                 className="w-full rounded-md border border-slate-200 px-3 py-2 focus:ring-2 focus:ring-sky-300"
               >
+                <option value="emailjs">EmailJS</option>
                 <option value="simulated">Simulated</option>
                 <option value="webhook">Webhook</option>
                 <option value="email">Email</option>
@@ -78,7 +79,7 @@ const NotificationsPage = () => {
               disabled={loading}
               className="w-full bg-sky-600 text-white rounded-md py-2 font-medium hover:bg-sky-700 disabled:opacity-50"
             >
-              {loading ? 'Sending...' : 'Send simulated notification'}
+              {loading ? 'Sending...' : 'Send notification'}
             </button>
           </form>
         </div>

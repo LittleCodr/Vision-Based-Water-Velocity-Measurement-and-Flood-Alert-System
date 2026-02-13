@@ -12,6 +12,7 @@ import { getDownloadURL, listAll, ref, uploadBytes } from 'firebase/storage';
 import {
   AlertItem,
   DatasetItem,
+  EmailDispatch,
   InferenceResult,
   ModelFile,
   NotificationItem,
@@ -29,6 +30,36 @@ const userId = () => auth.currentUser?.uid;
 const safeUserId = () => userId() || 'guest';
 const isoNow = () => new Date().toISOString();
 const uid = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2));
+
+const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'service_6pfgc2j';
+const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'template_cny2pih';
+const EMAILJS_ACCESS_TOKEN = import.meta.env.VITE_EMAILJS_ACCESS_TOKEN || 'BdehdbuzRiHLgX0TMnU_L';
+const MUNICIPALITY_EMAIL = import.meta.env.VITE_MUNICIPALITY_EMAIL || 'akshitar7890@gmail.com';
+
+const sendMunicipalityEmail = async (payload: EmailDispatch) => {
+  try {
+    const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${EMAILJS_ACCESS_TOKEN}`
+      },
+      body: JSON.stringify({
+        service_id: EMAILJS_SERVICE_ID,
+        template_id: EMAILJS_TEMPLATE_ID,
+        template_params: payload,
+        accessToken: EMAILJS_ACCESS_TOKEN
+      })
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || 'EmailJS send failed');
+    }
+  } catch (err) {
+    console.error('EmailJS dispatch failed', err);
+    throw err;
+  }
+};
 
 const uploadWithTimeout = async (storagePath: string, file: File, timeoutMs = 15000) => {
   const storageRef = ref(storage, storagePath);
@@ -138,19 +169,32 @@ export const alertsApi = {
     } satisfies AlertItem & Record<string, unknown>;
     await addDoc(collection(db, 'alerts'), doc);
     if (status === 'danger') {
+      const notificationDoc = {
+        id: uid(),
+        type: 'municipality_alert',
+        message: `High flood alert: velocity ${velocity} m/s (threshold ${threshold} m/s)`,
+        channel: 'emailjs',
+        delivered: false,
+        createdAt: isoNow(),
+        userId: safeUserId()
+      } satisfies NotificationItem & Record<string, unknown>;
       try {
-        await addDoc(collection(db, 'notifications'), {
-          id: uid(),
-          type: 'municipality_alert',
-          message: `High flood alert: velocity ${velocity} m/s (threshold ${threshold} m/s)`,
-          channel: 'simulated',
-          delivered: true,
-          createdAt: isoNow(),
-          userId: safeUserId()
+        await sendMunicipalityEmail({
+          to_email: MUNICIPALITY_EMAIL,
+          message: notificationDoc.message,
+          velocity: velocity.toFixed(2),
+          threshold: threshold.toFixed(2),
+          status: status
         });
-        console.info('Simulated notification dispatched to municipality');
+        notificationDoc.delivered = true;
       } catch (err) {
-        console.error('Notification write failed', err);
+        console.error('Municipality email send failed', err);
+      } finally {
+        try {
+          await addDoc(collection(db, 'notifications'), notificationDoc);
+        } catch (err) {
+          console.error('Notification log write failed', err);
+        }
       }
     }
     return { data: { data: doc } };
