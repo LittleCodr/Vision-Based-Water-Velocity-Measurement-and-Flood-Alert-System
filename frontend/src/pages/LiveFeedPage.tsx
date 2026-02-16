@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import FileUpload from '../components/FileUpload';
 import { analyzeVideo } from '../api/analysis';
+import { alertsApi, velocityApi } from '../api/client';
 import { VideoAnalysisResult } from '../types';
 
 type SourceMode = 'upload' | 'camera';
@@ -56,6 +57,24 @@ const LiveFeedPage = () => {
         showNonFlood('No flood detected. Upload flood footage to measure velocity.');
       } else {
         setStatus('Velocity calculated from flood footage.');
+        // Persist velocity reading for dashboards/graphs
+        try {
+          await velocityApi.create(res.average_velocity, 'analysis');
+        } catch (logErr) {
+          console.warn('Velocity log write failed', logErr);
+        }
+        // Auto-dispatch EmailJS when risk is MODERATE or HIGH
+        const warn = Number(import.meta.env.VITE_VELOCITY_WARN || '2.5');
+        const dangerEnv = import.meta.env.VITE_VELOCITY_DANGER;
+        const danger = dangerEnv ? Number(dangerEnv) : warn * 1.5;
+        const isHigh = res.risk_level === 'HIGH';
+        const threshold = isHigh ? danger : warn;
+        const status = isHigh ? 'danger' : 'warning';
+        try {
+          await alertsApi.create(threshold, res.average_velocity, status);
+        } catch (notifyErr) {
+          console.warn('Email alert dispatch failed', notifyErr);
+        }
       }
     } catch (err: any) {
       const message = err?.message || 'Analysis failed';
